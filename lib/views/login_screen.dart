@@ -8,6 +8,16 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
+  final TextEditingController emailController = TextEditingController();
+  final TextEditingController passwordController = TextEditingController();
+
+  @override
+  void dispose() {
+    emailController.dispose();
+    passwordController.dispose();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -53,6 +63,58 @@ class _LoginScreenState extends State<LoginScreen> {
                 Text(
                   "Login to manage your tasks",
                   style: TextStyle(color: theme.textTheme.bodyMedium?.color),
+                ),
+                const SizedBox(height: 25),
+                TextField(
+                  controller: emailController,
+                  decoration: InputDecoration(
+                    labelText: "Email",
+                    filled: true,
+                    fillColor: colorScheme.surfaceContainerHighest,
+                    prefixIcon: Icon(
+                      Icons.email,
+                      color: colorScheme.onSurfaceVariant,
+                    ),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 15),
+                TextField(
+                  controller: passwordController,
+                  obscureText: true,
+                  decoration: InputDecoration(
+                    labelText: "Password",
+                    filled: true,
+                    fillColor: colorScheme.surfaceContainerHighest,
+                    prefixIcon: Icon(
+                      Icons.lock,
+                      color: colorScheme.onSurfaceVariant,
+                    ),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 25),
+                SizedBox(
+                  width: double.infinity,
+                  height: 50,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF2563EB),
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                    onPressed: () {}, // Empty for now
+                    child: const Text(
+                      "Login",
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                  ),
                 ),
               ],
             ),
