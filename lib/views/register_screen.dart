@@ -4,26 +4,27 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
 import '../services/api_path.dart';
-import 'main_screen.dart';
-import 'register_screen.dart';
 
-class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key});
+class RegisterScreen extends StatefulWidget {
+  const RegisterScreen({super.key});
 
   @override
-  State<LoginScreen> createState() => _LoginScreenState();
+  State<RegisterScreen> createState() => _RegisterScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen> {
+class _RegisterScreenState extends State<RegisterScreen> {
+  final TextEditingController nameController = TextEditingController();
   final TextEditingController emailController = TextEditingController();
   final TextEditingController passwordController = TextEditingController();
 
   bool isLoading = false;
 
-  String get apiUrl => ApiPath.endpoint("login.php");
+  String get apiUrl => ApiPath.endpoint("register.php");
 
-  Future<void> loginUser() async {
-    if (emailController.text.isEmpty || passwordController.text.isEmpty) {
+  Future<void> registerUser() async {
+    if (nameController.text.isEmpty ||
+        emailController.text.isEmpty ||
+        passwordController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text("Please fill in all fields"),
@@ -40,38 +41,40 @@ class _LoginScreenState extends State<LoginScreen> {
         Uri.parse(apiUrl),
         headers: {"Content-Type": "application/json"},
         body: jsonEncode({
+          "name": nameController.text.trim(),
           "email": emailController.text.trim(),
           "password": passwordController.text,
         }),
       );
 
+      if (response.statusCode != 200) {
+        throw Exception("HTTP ${response.statusCode}");
+      }
+
       final data = jsonDecode(response.body);
 
-      if (data['status'] == 'success') {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text("Login Successful!"),
-            backgroundColor: Colors.green,
-          ),
-        );
-
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(
-            builder: (context) => MainScreen(user: data['user']),
-          ),
-        );
-      } else {
-        setState(() => isLoading = false); // Stop the loading spinner
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(data['message']), backgroundColor: Colors.red),
-        );
+      if (data["status"] != "success") {
+        throw Exception(data["message"] ?? "Registration failed");
       }
+
+      setState(() => isLoading = false);
+      if (!mounted) return;
+
+      // Success!
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Registration Successful! Please login."),
+          backgroundColor: Colors.green,
+        ),
+      );
+
+      // Send the user back to the Login Screen
+      Navigator.pop(context);
     } catch (e) {
       setState(() => isLoading = false);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text("Login failed: $e"),
+          content: Text("Registration failed: $e"),
           backgroundColor: Colors.red,
         ),
       );
@@ -80,6 +83,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   void dispose() {
+    nameController.dispose();
     emailController.dispose();
     passwordController.dispose();
     super.dispose();
@@ -92,11 +96,20 @@ class _LoginScreenState extends State<LoginScreen> {
 
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        leading: IconButton(
+          icon: Icon(Icons.arrow_back, color: colorScheme.primary),
+          onPressed: () => Navigator.pop(context),
+        ),
+      ),
       body: Center(
         child: SingleChildScrollView(
           child: Container(
             width: 400,
             padding: const EdgeInsets.all(24),
+            margin: const EdgeInsets.symmetric(horizontal: 16),
             decoration: BoxDecoration(
               color: colorScheme.surface,
               borderRadius: BorderRadius.circular(12),
@@ -111,16 +124,8 @@ class _LoginScreenState extends State<LoginScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Center(
-                  child: Icon(
-                    Icons.assignment_turned_in,
-                    size: 80,
-                    color: Color(0xFF1E3A8A),
-                  ),
-                ),
-                const SizedBox(height: 25),
                 Text(
-                  "Task Manager",
+                  "Create Account",
                   style: theme.textTheme.headlineSmall?.copyWith(
                     fontWeight: FontWeight.bold,
                     color: colorScheme.primary,
@@ -128,10 +133,26 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
                 const SizedBox(height: 5),
                 Text(
-                  "Login to manage your tasks",
+                  "Sign up to get started",
                   style: TextStyle(color: theme.textTheme.bodyMedium?.color),
                 ),
                 const SizedBox(height: 25),
+                TextField(
+                  controller: nameController,
+                  decoration: InputDecoration(
+                    labelText: "Full Name",
+                    filled: true,
+                    fillColor: colorScheme.surfaceContainerHighest,
+                    prefixIcon: Icon(
+                      Icons.person,
+                      color: colorScheme.onSurfaceVariant,
+                    ),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 15),
                 TextField(
                   controller: emailController,
                   decoration: InputDecoration(
@@ -176,31 +197,13 @@ class _LoginScreenState extends State<LoginScreen> {
                         borderRadius: BorderRadius.circular(10),
                       ),
                     ),
-                    onPressed: isLoading ? null : loginUser,
+                    onPressed: isLoading ? null : registerUser,
                     child: isLoading
                         ? const CircularProgressIndicator(color: Colors.white)
                         : const Text(
-                            "Login",
+                            "Register",
                             style: TextStyle(fontWeight: FontWeight.bold),
                           ),
-                  ),
-                ),
-
-                const SizedBox(height: 15),
-                Center(
-                  child: TextButton(
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const RegisterScreen(),
-                        ),
-                      );
-                    },
-                    child: const Text(
-                      "Don't have an account? Register here",
-                      style: TextStyle(color: Color(0xFF2563EB)),
-                    ),
                   ),
                 ),
               ],
