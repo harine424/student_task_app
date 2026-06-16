@@ -83,14 +83,6 @@ class _MainScreenState extends State<MainScreen> {
         final data = jsonDecode(response.body);
         if (data['status'] == 'success') {
           _fetchTasks();
-          if (!mounted) return;
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text("Task deleted"),
-              backgroundColor: Colors.redAccent,
-              duration: Duration(seconds: 2),
-            ),
-          );
         }
       }
     } catch (e) {
@@ -365,7 +357,34 @@ class _MainScreenState extends State<MainScreen> {
                 child: const Icon(Icons.delete, color: Colors.white),
               ),
               onDismissed: (direction) {
-                _deleteTask(task['id'].toString());
+                final targetIndex = _tasks.indexOf(task);
+                final backupItem = task;
+
+                setState(() {
+                  _tasks.removeAt(targetIndex);
+                });
+
+                final snackBar = SnackBar(
+                  content: const Text("Task deleted"),
+                  duration: const Duration(seconds: 2),
+                  action: SnackBarAction(
+                    label: "Undo",
+                    onPressed: () {
+                      setState(() {
+                        _tasks.insert(targetIndex, backupItem);
+                      });
+                    },
+                  ),
+                );
+
+                ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                ScaffoldMessenger.of(
+                  context,
+                ).showSnackBar(snackBar).closed.then((reason) {
+                  if (reason == SnackBarClosedReason.timeout) {
+                    _deleteTask(backupItem['id'].toString());
+                  }
+                });
               },
               child: Card(
                 margin: const EdgeInsets.only(bottom: 10),
