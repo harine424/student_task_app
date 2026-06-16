@@ -60,7 +60,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
       setState(() => isLoading = false);
       if (!mounted) return;
 
-      // Success!
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text("Registration Successful! Please login."),
@@ -68,7 +67,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
         ),
       );
 
-      // Send the user back to the Login Screen
       Navigator.pop(context);
     } catch (e) {
       setState(() => isLoading = false);

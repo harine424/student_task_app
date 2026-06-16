@@ -1,4 +1,9 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+
+import '../services/api_path.dart';
 
 class MainScreen extends StatefulWidget {
   final Map<String, dynamic> user;
@@ -9,12 +14,42 @@ class MainScreen extends StatefulWidget {
 }
 
 class _MainScreenState extends State<MainScreen> {
-  final List<Map<String, dynamic>> _tasks = [];
+  List<dynamic> _tasks = [];
   bool _isLoading = false;
 
   @override
   void initState() {
     super.initState();
+    _fetchTasks();
+  }
+
+  Future<void> _fetchTasks() async {
+    setState(() => _isLoading = true);
+    try {
+      final url = ApiPath.endpoint(
+        "load_tasks.php?user_id=${widget.user['id']}",
+      );
+      print("Fetching tasks from: $url");
+
+      final response = await http.get(Uri.parse(url));
+
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> data = jsonDecode(response.body);
+
+        if (data['status'] == 'success') {
+          setState(() {
+            _tasks = data['tasks'];
+            _isLoading = false;
+          });
+        } else {
+          setState(() => _isLoading = false);
+          print("Server returned an error: ${data['message']}");
+        }
+      }
+    } catch (e) {
+      setState(() => _isLoading = false);
+      print("Error fetching tasks: $e");
+    }
   }
 
   @override
@@ -37,7 +72,7 @@ class _MainScreenState extends State<MainScreen> {
       ),
       body: RefreshIndicator(
         onRefresh: () async {
-          // await _loadTasks();
+          await _fetchTasks();
         },
         child: ListView(
           padding: const EdgeInsets.all(16.0),
@@ -168,11 +203,11 @@ class _MainScreenState extends State<MainScreen> {
                   color: Colors.blueAccent,
                 ),
                 title: Text(
-                  task['title'],
+                  task['title'] ?? 'No Title',
                   style: const TextStyle(fontWeight: FontWeight.w600),
                 ),
-                subtitle: Text("Due: ${task['deadline']}"),
-                trailing: _buildStatusChip(task['status']),
+                subtitle: Text("Due: ${task['deadline'] ?? 'No Date'}"),
+                trailing: _buildStatusChip(task['status'] ?? 'Pending'),
               ),
             ),
           )
