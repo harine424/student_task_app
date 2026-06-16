@@ -49,6 +49,27 @@ class _MainScreenState extends State<MainScreen> {
     }
   }
 
+  Future<void> _toggleTaskStatus(String taskId, String currentStatus) async {
+    String newStatus = currentStatus == 'Completed' ? 'Pending' : 'Completed';
+    try {
+      final url = ApiPath.endpoint("update_task.php");
+      final response = await http.post(
+        Uri.parse(url),
+        headers: {"Content-Type": "application/json"},
+        body: jsonEncode({"task_id": taskId, "status": newStatus}),
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['status'] == 'success') {
+          _fetchTasks();
+        }
+      }
+    } catch (e) {
+      print("Error updating task: $e");
+    }
+  }
+
   void _showAddTaskDialog() {
     final TextEditingController titleController = TextEditingController();
     final TextEditingController dateController = TextEditingController();
@@ -238,6 +259,8 @@ class _MainScreenState extends State<MainScreen> {
   }
 
   Widget _buildSummaryRow() {
+    int pendingCount = _tasks.where((t) => t['status'] == 'Pending').length;
+
     return Row(
       children: [
         Expanded(
@@ -249,7 +272,11 @@ class _MainScreenState extends State<MainScreen> {
         ),
         const SizedBox(width: 10),
         Expanded(
-          child: _buildSummaryCard("Pending", "0", Icons.hourglass_empty),
+          child: _buildSummaryCard(
+            "Pending",
+            pendingCount.toString(),
+            Icons.hourglass_empty,
+          ),
         ),
       ],
     );
@@ -303,13 +330,30 @@ class _MainScreenState extends State<MainScreen> {
                 borderRadius: BorderRadius.circular(10),
               ),
               child: ListTile(
-                leading: const Icon(
-                  Icons.radio_button_unchecked,
-                  color: Colors.blueAccent,
+                leading: IconButton(
+                  icon: Icon(
+                    task['status'] == 'Completed'
+                        ? Icons.check_circle
+                        : Icons.radio_button_unchecked,
+                    color: task['status'] == 'Completed'
+                        ? Colors.green
+                        : Colors.blueAccent,
+                  ),
+                  onPressed: () {
+                    _toggleTaskStatus(
+                      task['id'].toString(),
+                      task['status'] ?? 'Pending',
+                    );
+                  },
                 ),
                 title: Text(
                   task['title'] ?? 'No Title',
-                  style: const TextStyle(fontWeight: FontWeight.w600),
+                  style: TextStyle(
+                    fontWeight: FontWeight.w600,
+                    decoration: task['status'] == 'Completed'
+                        ? TextDecoration.lineThrough
+                        : null,
+                  ),
                 ),
                 subtitle: Text("Due: ${task['deadline'] ?? 'No Date'}"),
                 trailing: _buildStatusChip(task['status'] ?? 'Pending'),
