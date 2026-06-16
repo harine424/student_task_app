@@ -29,7 +29,6 @@ class _MainScreenState extends State<MainScreen> {
       final url = ApiPath.endpoint(
         "load_tasks.php?user_id=${widget.user['id']}",
       );
-      print("Fetching tasks from: $url");
 
       final response = await http.get(Uri.parse(url));
 
@@ -43,12 +42,120 @@ class _MainScreenState extends State<MainScreen> {
           });
         } else {
           setState(() => _isLoading = false);
-          print("Server returned an error: ${data['message']}");
         }
       }
     } catch (e) {
       setState(() => _isLoading = false);
-      print("Error fetching tasks: $e");
+    }
+  }
+
+  void _showAddTaskDialog() {
+    final TextEditingController titleController = TextEditingController();
+    final TextEditingController dateController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text("Add New Task"),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: titleController,
+                decoration: const InputDecoration(
+                  labelText: "Task Title",
+                  prefixIcon: Icon(Icons.task),
+                ),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: dateController,
+                readOnly: true,
+                decoration: const InputDecoration(
+                  labelText: "Select Deadline",
+                  prefixIcon: Icon(Icons.calendar_today),
+                ),
+                onTap: () async {
+                  DateTime? pickedDate = await showDatePicker(
+                    context: context,
+                    initialDate: DateTime.now(),
+                    firstDate: DateTime.now(),
+                    lastDate: DateTime(2030),
+                  );
+
+                  if (pickedDate != null) {
+                    String formattedDate =
+                        "${pickedDate.year}-${pickedDate.month.toString().padLeft(2, '0')}-${pickedDate.day.toString().padLeft(2, '0')}";
+                    dateController.text = formattedDate;
+                  }
+                },
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text("Cancel"),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pop(dialogContext);
+                _submitNewTask(titleController.text, dateController.text);
+              },
+              child: const Text("Save Task"),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _submitNewTask(String title, String deadline) async {
+    if (title.isEmpty) return;
+
+    try {
+      final url = ApiPath.endpoint("add_task.php");
+      final response = await http.post(
+        Uri.parse(url),
+        headers: {"Content-Type": "application/json"},
+        body: jsonEncode({
+          "user_id": widget.user['id'],
+          "title": title,
+          "description": "",
+          "deadline": deadline.isEmpty ? "No Date" : deadline,
+          "status": "Pending",
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+
+        if (data['status'] == 'success') {
+          _fetchTasks();
+
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text("Task added successfully!"),
+              backgroundColor: Colors.green,
+            ),
+          );
+        } else {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text("Failed: ${data['message']}"),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Error: $e"), backgroundColor: Colors.red),
+      );
     }
   }
 
@@ -92,9 +199,7 @@ class _MainScreenState extends State<MainScreen> {
       ),
       floatingActionButton: FloatingActionButton(
         backgroundColor: Colors.blueAccent,
-        onPressed: () {
-          print("Add Task button pressed!");
-        },
+        onPressed: _showAddTaskDialog,
         child: const Icon(Icons.add, color: Colors.white),
       ),
     );
