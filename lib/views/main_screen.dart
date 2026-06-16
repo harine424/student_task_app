@@ -70,6 +70,34 @@ class _MainScreenState extends State<MainScreen> {
     }
   }
 
+  Future<void> _deleteTask(String taskId) async {
+    try {
+      final url = ApiPath.endpoint("delete_task.php");
+      final response = await http.post(
+        Uri.parse(url),
+        headers: {"Content-Type": "application/json"},
+        body: jsonEncode({"task_id": taskId}),
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['status'] == 'success') {
+          _fetchTasks();
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text("Task deleted"),
+              backgroundColor: Colors.redAccent,
+              duration: Duration(seconds: 2),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      print("Error deleting task: $e");
+    }
+  }
+
   void _showAddTaskDialog() {
     final TextEditingController titleController = TextEditingController();
     final TextEditingController dateController = TextEditingController();
@@ -324,39 +352,55 @@ class _MainScreenState extends State<MainScreen> {
     return Column(
       children: _tasks
           .map(
-            (task) => Card(
-              margin: const EdgeInsets.only(bottom: 10),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
+            (task) => Dismissible(
+              key: Key(task['id'].toString()),
+              direction: DismissDirection.endToStart,
+              background: Container(
+                alignment: Alignment.centerRight,
+                padding: const EdgeInsets.only(right: 20),
+                decoration: BoxDecoration(
+                  color: Colors.redAccent,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(Icons.delete, color: Colors.white),
               ),
-              child: ListTile(
-                leading: IconButton(
-                  icon: Icon(
-                    task['status'] == 'Completed'
-                        ? Icons.check_circle
-                        : Icons.radio_button_unchecked,
-                    color: task['status'] == 'Completed'
-                        ? Colors.green
-                        : Colors.blueAccent,
-                  ),
-                  onPressed: () {
-                    _toggleTaskStatus(
-                      task['id'].toString(),
-                      task['status'] ?? 'Pending',
-                    );
-                  },
+              onDismissed: (direction) {
+                _deleteTask(task['id'].toString());
+              },
+              child: Card(
+                margin: const EdgeInsets.only(bottom: 10),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
                 ),
-                title: Text(
-                  task['title'] ?? 'No Title',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w600,
-                    decoration: task['status'] == 'Completed'
-                        ? TextDecoration.lineThrough
-                        : null,
+                child: ListTile(
+                  leading: IconButton(
+                    icon: Icon(
+                      task['status'] == 'Completed'
+                          ? Icons.check_circle
+                          : Icons.radio_button_unchecked,
+                      color: task['status'] == 'Completed'
+                          ? Colors.green
+                          : Colors.blueAccent,
+                    ),
+                    onPressed: () {
+                      _toggleTaskStatus(
+                        task['id'].toString(),
+                        task['status'] ?? 'Pending',
+                      );
+                    },
                   ),
+                  title: Text(
+                    task['title'] ?? 'No Title',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w600,
+                      decoration: task['status'] == 'Completed'
+                          ? TextDecoration.lineThrough
+                          : null,
+                    ),
+                  ),
+                  subtitle: Text("Due: ${task['deadline'] ?? 'No Date'}"),
+                  trailing: _buildStatusChip(task['status'] ?? 'Pending'),
                 ),
-                subtitle: Text("Due: ${task['deadline'] ?? 'No Date'}"),
-                trailing: _buildStatusChip(task['status'] ?? 'Pending'),
               ),
             ),
           )
