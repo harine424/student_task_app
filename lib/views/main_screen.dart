@@ -17,6 +17,20 @@ class MainScreen extends StatefulWidget {
 }
 
 class _MainScreenState extends State<MainScreen> {
+  int _currentIndex = 0;
+  List<dynamic> _tasks = [];
+  String _currentFilter = 'All';
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchTasks();
+  }
+
+  int _calculateResponsibilityStreak() {
+    return _tasks.where((t) => t['status'] == 'Completed').length;
+  }
+
   String _calculateTimeRemaining(String deadlineStr) {
     try {
       DateTime deadline = DateTime.parse(deadlineStr);
@@ -33,32 +47,37 @@ class _MainScreenState extends State<MainScreen> {
     }
   }
 
-  int _currentIndex = 0;
-  List<dynamic> _tasks = [];
-
-  @override
-  void initState() {
-    super.initState();
-    _fetchTasks();
-  }
-
   Future<void> _fetchTasks() async {
     try {
       final url = ApiPath.endpoint(
         "load_tasks.php?user_id=${widget.user['id']}",
       );
       final response = await http.get(Uri.parse(url));
+
       if (response.statusCode == 200) {
         final Map<String, dynamic> data = jsonDecode(response.body);
-        if (data['status'] == 'success') setState(() => _tasks = data['tasks']);
+
+        if (data['status'] == 'success') {
+          setState(() {
+            _tasks = data['tasks'] ?? [];
+          });
+        }
       }
     } catch (e) {
       debugPrint("Error: $e");
     }
   }
 
-  Future<void> _toggleTaskStatus(String id, String status) async {
-    String newStatus = status == 'Completed' ? 'Pending' : 'Completed';
+  Future<void> _cycleTaskStatus(String id, String currentStatus) async {
+    String newStatus;
+    if (currentStatus == 'Pending') {
+      newStatus = 'In Progress';
+    } else if (currentStatus == 'In Progress') {
+      newStatus = 'Completed';
+    } else {
+      newStatus = 'Pending';
+    }
+
     await http.post(
       Uri.parse(ApiPath.endpoint("update_task.php")),
       headers: {"Content-Type": "application/json"},
@@ -74,6 +93,33 @@ class _MainScreenState extends State<MainScreen> {
       body: jsonEncode({"task_id": id}),
     );
     _fetchTasks();
+  }
+
+  Future<void> _submitNewTask(String title, String deadline) async {
+    if (title.isEmpty) return;
+    await http.post(
+      Uri.parse(ApiPath.endpoint("add_task.php")),
+      headers: {"Content-Type": "application/json"},
+      body: jsonEncode({
+        "user_id": widget.user['id'],
+        "title": title,
+        "deadline": deadline,
+        "status": "Pending",
+      }),
+    );
+    _fetchTasks();
+  }
+
+  IconData _getStatusIcon(String status) {
+    if (status == 'Completed') return Icons.check_circle;
+    if (status == 'In Progress') return Icons.run_circle;
+    return Icons.radio_button_unchecked;
+  }
+
+  Color _getStatusColor(String status) {
+    if (status == 'Completed') return Colors.green;
+    if (status == 'In Progress') return Colors.orange;
+    return Colors.grey;
   }
 
   void _showAddTaskDialog() {
@@ -101,9 +147,10 @@ class _MainScreenState extends State<MainScreen> {
                   firstDate: DateTime.now(),
                   lastDate: DateTime(2030),
                 );
-                if (picked != null)
+                if (picked != null) {
                   dateController.text =
                       "${picked.year}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}";
+                }
               },
             ),
           ],
@@ -125,29 +172,30 @@ class _MainScreenState extends State<MainScreen> {
     );
   }
 
-  Future<void> _submitNewTask(String title, String deadline) async {
-    if (title.isEmpty) return;
-    await http.post(
-      Uri.parse(ApiPath.endpoint("add_task.php")),
-      headers: {"Content-Type": "application/json"},
-      body: jsonEncode({
-        "user_id": widget.user['id'],
-        "title": title,
-        "deadline": deadline,
-        "status": "Pending",
-      }),
-    );
-    _fetchTasks();
-  }
-
   Widget _buildDashboard() {
-    return _tasks.isEmpty
-        ? const Center(child: Text("No tasks yet!"))
+    final filteredTasks = _tasks.where((task) {
+      if (_currentFilter == 'All') return true;
+
+      if (_currentFilter == 'Overdue') {
+        try {
+          DateTime deadline = DateTime.parse(task['deadline']);
+          return deadline.isBefore(DateTime.now()) &&
+              task['status'] != 'Completed';
+        } catch (e) {
+          return false;
+        }
+      }
+
+      return task['status'] == _currentFilter;
+    }).toList();
+
+    return filteredTasks.isEmpty
+        ? Center(child: Text("No tasks in '$_currentFilter'"))
         : ListView.builder(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            itemCount: _tasks.length,
+            itemCount: filteredTasks.length,
             itemBuilder: (context, index) {
-              final task = _tasks[index];
+              final task = filteredTasks[index];
               return Dismissible(
                 key: Key(task['id'].toString()),
                 direction: DismissDirection.endToStart,
@@ -173,8 +221,9 @@ class _MainScreenState extends State<MainScreen> {
                       )
                       .closed
                       .then((reason) {
-                        if (reason == SnackBarClosedReason.timeout)
+                        if (reason == SnackBarClosedReason.timeout) {
                           _deleteTask(task['id'].toString());
+                        }
                       });
                 },
                 child: Card(
@@ -189,20 +238,6 @@ class _MainScreenState extends State<MainScreen> {
                         ),
                       ),
                     ),
-                    leading: IconButton(
-                      icon: Icon(
-                        task['status'] == 'Completed'
-                            ? Icons.check_circle
-                            : Icons.radio_button_unchecked,
-                        color: task['status'] == 'Completed'
-                            ? Colors.green
-                            : Colors.blueAccent,
-                      ),
-                      onPressed: () => _toggleTaskStatus(
-                        task['id'].toString(),
-                        task['status'],
-                      ),
-                    ),
                     title: Text(
                       task['title'],
                       style: TextStyle(
@@ -215,11 +250,24 @@ class _MainScreenState extends State<MainScreen> {
                       ),
                     ),
                     subtitle: Text(
-                      "${_calculateTimeRemaining(task['deadline'])}\n${task['status'] == 'Completed' ? 'Great job! Finished.' : 'Tap circle to mark complete.'}",
+                      task['status'] == 'Completed'
+                          ? "Due: ${task['deadline']}\nStatus: Completed - Great job! 🎉"
+                          : "Due: ${task['deadline']}\nStatus: ${task['status']} - ${_calculateTimeRemaining(task['deadline'])}",
                       style: const TextStyle(
                         fontSize: 12,
                         fontStyle: FontStyle.italic,
                         color: Colors.blueGrey,
+                      ),
+                    ),
+                    leading: IconButton(
+                      icon: Icon(
+                        _getStatusIcon(task['status']),
+                        color: _getStatusColor(task['status']),
+                        size: 28,
+                      ),
+                      onPressed: () => _cycleTaskStatus(
+                        task['id'].toString(),
+                        task['status'],
                       ),
                     ),
                   ),
@@ -235,19 +283,64 @@ class _MainScreenState extends State<MainScreen> {
       appBar: AppBar(
         title: Row(
           children: [
-            Text(_currentIndex == 0 ? 'My Tasks' : 'Profile'),
-            const Spacer(),
-            const Icon(Icons.local_fire_department, color: Colors.orange),
-            const SizedBox(width: 4),
             Text(
-              "5",
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              _currentIndex == 0
+                  ? 'My Tasks'
+                  : (_currentIndex == 1 ? 'Rewards' : 'Profile'),
             ),
-            const SizedBox(width: 10),
+            const Spacer(),
+            if (_calculateResponsibilityStreak() > 0) ...[
+              const Icon(Icons.local_fire_department, color: Colors.orange),
+              const SizedBox(width: 4),
+              Text(
+                "${_calculateResponsibilityStreak()}",
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(width: 10),
+            ],
           ],
         ),
         backgroundColor: Colors.blueAccent,
         foregroundColor: Colors.white,
+        actions: [
+          if (_currentIndex == 0)
+            PopupMenuButton<String>(
+              icon: const Icon(Icons.filter_list),
+              onSelected: (String newValue) {
+                setState(() {
+                  _currentFilter = newValue;
+                });
+              },
+              itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
+                const PopupMenuItem<String>(
+                  value: 'All',
+                  child: Text('All Tasks'),
+                ),
+                const PopupMenuItem<String>(
+                  value: 'Pending',
+                  child: Text('Pending'),
+                ),
+                const PopupMenuItem<String>(
+                  value: 'In Progress',
+                  child: Text('In Progress'),
+                ),
+                const PopupMenuItem<String>(
+                  value: 'Completed',
+                  child: Text('Completed'),
+                ),
+                const PopupMenuItem<String>(
+                  value: 'Overdue',
+                  child: Text(
+                    'Overdue Deadlines',
+                    style: TextStyle(color: Colors.red),
+                  ),
+                ),
+              ],
+            ),
+        ],
       ),
       body: _currentIndex == 0
           ? _buildDashboard()
@@ -262,7 +355,7 @@ class _MainScreenState extends State<MainScreen> {
           BottomNavigationBarItem(
             icon: Icon(Icons.emoji_events),
             label: "Rewards",
-          ), // Changed from Profile
+          ),
           BottomNavigationBarItem(icon: Icon(Icons.person), label: "Profile"),
         ],
       ),
