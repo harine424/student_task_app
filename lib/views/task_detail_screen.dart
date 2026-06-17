@@ -30,29 +30,49 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
   }
 
   Future<void> _updateTask() async {
+    // Use the 10.0.2.2 IP for Android Emulator
+    final url = ApiPath.endpoint("edit_task.php");
+
+    debugPrint("Calling: $url");
+    debugPrint("Data: ID=${widget.task['id']}, Title=${_titleController.text}");
+
     try {
       final response = await http
           .post(
-            Uri.parse(ApiPath.endpoint("edit_task.php")),
+            Uri.parse(url),
             headers: {"Content-Type": "application/json"},
             body: jsonEncode({
               'task_id': widget.task['id'].toString(),
               'title': _titleController.text,
             }),
           )
-          .timeout(const Duration(seconds: 5));
+          .timeout(const Duration(seconds: 10));
+
+      debugPrint("Status Code: ${response.statusCode}");
+      debugPrint("Response Body: ${response.body}");
 
       if (response.statusCode == 200) {
-        widget.onUpdate();
-        setState(() => _isEditing = false);
-        if (!mounted) return;
-        Navigator.pop(context);
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text("Task updated!")));
+        final jsonResponse = jsonDecode(response.body);
+
+        if (jsonResponse['status'] == 'success') {
+          widget.onUpdate();
+          if (!mounted) return;
+          Navigator.pop(context);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("Task updated successfully!")),
+          );
+        } else {
+          throw Exception(jsonResponse['message']);
+        }
+      } else {
+        throw Exception("Server returned ${response.statusCode}");
       }
     } catch (e) {
-      debugPrint("Error: $e");
+      debugPrint("Critical Error: $e");
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text("Failed: $e")));
     }
   }
 
@@ -61,6 +81,7 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text("Task Details"),
+
         actions: [
           IconButton(
             icon: Icon(_isEditing ? Icons.save : Icons.edit),

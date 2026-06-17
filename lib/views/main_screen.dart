@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 
 import '../services/api_path.dart';
 import 'profile_screen.dart';
+import 'rewards_screen.dart';
 import 'task_detail_screen.dart';
 
 class MainScreen extends StatefulWidget {
@@ -16,6 +17,22 @@ class MainScreen extends StatefulWidget {
 }
 
 class _MainScreenState extends State<MainScreen> {
+  String _calculateTimeRemaining(String deadlineStr) {
+    try {
+      DateTime deadline = DateTime.parse(deadlineStr);
+      DateTime now = DateTime.now();
+      Duration diff = deadline.difference(now);
+
+      if (diff.isNegative) {
+        return "Overdue by: ${diff.abs().inHours}h ${diff.abs().inMinutes.remainder(60)}m";
+      } else {
+        return "Time left: ${diff.inHours}h ${diff.inMinutes.remainder(60)}m";
+      }
+    } catch (e) {
+      return "No deadline";
+    }
+  }
+
   int _currentIndex = 0;
   List<dynamic> _tasks = [];
 
@@ -186,8 +203,25 @@ class _MainScreenState extends State<MainScreen> {
                         task['status'],
                       ),
                     ),
-                    title: Text(task['title']),
-                    subtitle: Text("Due: ${task['deadline']}"),
+                    title: Text(
+                      task['title'],
+                      style: TextStyle(
+                        decoration: task['status'] == 'Completed'
+                            ? TextDecoration.lineThrough
+                            : null,
+                        color: task['status'] == 'Completed'
+                            ? Colors.grey
+                            : Colors.black,
+                      ),
+                    ),
+                    subtitle: Text(
+                      "${_calculateTimeRemaining(task['deadline'])}\n${task['status'] == 'Completed' ? 'Great job! Finished.' : 'Tap circle to mark complete.'}",
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontStyle: FontStyle.italic,
+                        color: Colors.blueGrey,
+                      ),
+                    ),
                   ),
                 ),
               );
@@ -199,18 +233,36 @@ class _MainScreenState extends State<MainScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(_currentIndex == 0 ? 'My Tasks' : 'Profile'),
+        title: Row(
+          children: [
+            Text(_currentIndex == 0 ? 'My Tasks' : 'Profile'),
+            const Spacer(),
+            const Icon(Icons.local_fire_department, color: Colors.orange),
+            const SizedBox(width: 4),
+            Text(
+              "5",
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(width: 10),
+          ],
+        ),
         backgroundColor: Colors.blueAccent,
         foregroundColor: Colors.white,
       ),
       body: _currentIndex == 0
           ? _buildDashboard()
-          : ProfileScreen(user: widget.user),
+          : (_currentIndex == 1
+                ? RewardsScreen(tasks: _tasks)
+                : ProfileScreen(user: widget.user)),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _currentIndex,
         onTap: (index) => setState(() => _currentIndex = index),
         items: const [
           BottomNavigationBarItem(icon: Icon(Icons.list), label: "Tasks"),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.emoji_events),
+            label: "Rewards",
+          ), // Changed from Profile
           BottomNavigationBarItem(icon: Icon(Icons.person), label: "Profile"),
         ],
       ),
