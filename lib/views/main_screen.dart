@@ -79,7 +79,9 @@ class _MainScreenState extends State<MainScreen> {
     }
 
     await http.post(
+      
       Uri.parse(ApiPath.endpoint("update_task.php")),
+      
       headers: {"Content-Type": "application/json"},
       body: jsonEncode({"task_id": id, "status": newStatus}),
     );
