@@ -20,17 +20,14 @@ class _LoginScreenState extends State<LoginScreen> {
   final TextEditingController passwordController = TextEditingController();
   bool isLoading = false;
 
-  // New State for the UI elements
   bool _obscurePassword = true;
   bool _rememberMe = false;
 
-  // Colors
   final Color primaryMaroon = const Color(0xFF7B1113);
   final Color fieldBackground = const Color(0xFFF5F6FA);
 
   String get apiUrl => ApiPath.endpoint("login.php");
 
-  // Your exact original backend logic
   Future<void> loginUser() async {
     if (emailController.text.isEmpty || passwordController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -115,8 +112,6 @@ class _LoginScreenState extends State<LoginScreen> {
             children: [
               const SizedBox(height: 20),
 
-              // --- Illustration Placeholder ---
-              // You can replace this Icon with an Image.asset later if you have the graphic!
               Center(
                 child: Container(
                   height: 200,
@@ -134,7 +129,6 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
               const SizedBox(height: 40),
 
-              // --- Header Text ---
               Text(
                 "Login",
                 style: TextStyle(
@@ -205,7 +199,6 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
               const SizedBox(height: 15),
 
-              // --- Remember Me Switch ---
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -222,7 +215,6 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
               const SizedBox(height: 20),
 
-              // --- Login Button ---
               SizedBox(
                 width: double.infinity,
                 height: 55,
@@ -249,7 +241,6 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
               const SizedBox(height: 20),
 
-              // --- Bottom Navigation (Sign Up Link) ---
               Center(
                 child: GestureDetector(
                   onTap: () {

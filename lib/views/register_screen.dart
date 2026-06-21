@@ -18,6 +18,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final TextEditingController passwordController = TextEditingController();
 
   bool isLoading = false;
+  bool _obscurePassword = true;
+  bool _rememberMe = false;
+
+  final Color primaryMaroon = const Color(0xFF7B1113);
+  final Color fieldBackground = const Color(0xFFF5F6FA);
 
   String get apiUrl => ApiPath.endpoint("register.php");
 
@@ -70,6 +75,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       Navigator.pop(context);
     } catch (e) {
       setState(() => isLoading = false);
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text("Registration failed: $e"),
@@ -89,119 +95,203 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-
     return Scaffold(
-      backgroundColor: theme.scaffoldBackgroundColor,
+      backgroundColor: Colors.white, // Clean white background
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
-          icon: Icon(Icons.arrow_back, color: colorScheme.primary),
+          icon: Icon(Icons.arrow_back, color: primaryMaroon),
           onPressed: () => Navigator.pop(context),
         ),
       ),
       body: Center(
         child: SingleChildScrollView(
           child: Container(
-            width: 400,
+            width: 400, // Fixed width for a clean, justified look
             padding: const EdgeInsets.all(24),
             margin: const EdgeInsets.symmetric(horizontal: 16),
-            decoration: BoxDecoration(
-              color: colorScheme.surface,
-              borderRadius: BorderRadius.circular(12),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.10),
-                  blurRadius: 10,
-                ),
-              ],
-            ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
+                // --- Illustration Placeholder ---
+                Center(
+                  child: Container(
+                    height: 180,
+                    width: 250,
+                    decoration: BoxDecoration(
+                      color: fieldBackground,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Icon(
+                      Icons.person_add_alt_1,
+                      size: 90,
+                      color: primaryMaroon.withOpacity(0.5),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 30),
+
+                // --- Header Text ---
                 Text(
-                  "Create Account",
-                  style: theme.textTheme.headlineSmall?.copyWith(
+                  "Register",
+                  style: TextStyle(
+                    fontSize: 36,
                     fontWeight: FontWeight.bold,
-                    color: colorScheme.primary,
+                    color: primaryMaroon,
                   ),
                 ),
                 const SizedBox(height: 5),
-                Text(
-                  "Sign up to get started",
-                  style: TextStyle(color: theme.textTheme.bodyMedium?.color),
+                const Text(
+                  "Please register to login.",
+                  style: TextStyle(fontSize: 16, color: Colors.grey),
                 ),
-                const SizedBox(height: 25),
-                TextField(
-                  controller: nameController,
-                  decoration: InputDecoration(
-                    labelText: "Full Name",
-                    filled: true,
-                    fillColor: colorScheme.surfaceContainerHighest,
-                    prefixIcon: Icon(
-                      Icons.person,
-                      color: colorScheme.onSurfaceVariant,
-                    ),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(10),
+                const SizedBox(height: 30),
+
+                // --- Name Field ---
+                Container(
+                  decoration: BoxDecoration(
+                    color: fieldBackground,
+                    borderRadius: BorderRadius.circular(15),
+                  ),
+                  child: TextField(
+                    controller: nameController,
+                    decoration: const InputDecoration(
+                      border: InputBorder.none,
+                      prefixIcon: Icon(
+                        Icons.person_outline,
+                        color: Colors.grey,
+                      ),
+                      hintText: "Full Name",
+                      hintStyle: TextStyle(color: Colors.grey),
+                      contentPadding: EdgeInsets.symmetric(vertical: 18),
                     ),
                   ),
                 ),
                 const SizedBox(height: 15),
-                TextField(
-                  controller: emailController,
-                  decoration: InputDecoration(
-                    labelText: "Email",
-                    filled: true,
-                    fillColor: colorScheme.surfaceContainerHighest,
-                    prefixIcon: Icon(
-                      Icons.email,
-                      color: colorScheme.onSurfaceVariant,
-                    ),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(10),
+
+                // --- Email Field ---
+                Container(
+                  decoration: BoxDecoration(
+                    color: fieldBackground,
+                    borderRadius: BorderRadius.circular(15),
+                  ),
+                  child: TextField(
+                    controller: emailController,
+                    decoration: const InputDecoration(
+                      border: InputBorder.none,
+                      prefixIcon: Icon(
+                        Icons.email_outlined,
+                        color: Colors.grey,
+                      ),
+                      hintText: "Email Address",
+                      hintStyle: TextStyle(color: Colors.grey),
+                      contentPadding: EdgeInsets.symmetric(vertical: 18),
                     ),
                   ),
                 ),
                 const SizedBox(height: 15),
-                TextField(
-                  controller: passwordController,
-                  obscureText: true,
-                  decoration: InputDecoration(
-                    labelText: "Password",
-                    filled: true,
-                    fillColor: colorScheme.surfaceContainerHighest,
-                    prefixIcon: Icon(
-                      Icons.lock,
-                      color: colorScheme.onSurfaceVariant,
-                    ),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(10),
+
+                Container(
+                  decoration: BoxDecoration(
+                    color: fieldBackground,
+                    borderRadius: BorderRadius.circular(15),
+                  ),
+                  child: TextField(
+                    controller: passwordController,
+                    obscureText: _obscurePassword,
+                    decoration: InputDecoration(
+                      border: InputBorder.none,
+                      prefixIcon: const Icon(
+                        Icons.lock_outline,
+                        color: Colors.grey,
+                      ),
+                      suffixIcon: IconButton(
+                        icon: Icon(
+                          _obscurePassword
+                              ? Icons.visibility_off
+                              : Icons.visibility,
+                          color: Colors.grey,
+                        ),
+                        onPressed: () {
+                          setState(() {
+                            _obscurePassword = !_obscurePassword;
+                          });
+                        },
+                      ),
+                      hintText: "••••••••",
+                      hintStyle: const TextStyle(color: Colors.grey),
+                      contentPadding: const EdgeInsets.symmetric(vertical: 18),
                     ),
                   ),
                 ),
+                const SizedBox(height: 15),
+
+                // --- Remember Me Switch ---
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text(
+                      "Remember me next time",
+                      style: TextStyle(fontSize: 12, color: Colors.grey),
+                    ),
+                    Switch(
+                      value: _rememberMe,
+                      onChanged: (value) => setState(() => _rememberMe = value),
+                      activeColor: primaryMaroon,
+                    ),
+                  ],
+                ),
                 const SizedBox(height: 25),
+
+                // --- Register Button ---
                 SizedBox(
                   width: double.infinity,
-                  height: 50,
+                  height: 55,
                   child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF2563EB),
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                    ),
                     onPressed: isLoading ? null : registerUser,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: primaryMaroon,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(15),
+                      ),
+                      elevation: 2,
+                    ),
                     child: isLoading
                         ? const CircularProgressIndicator(color: Colors.white)
                         : const Text(
-                            "Register",
-                            style: TextStyle(fontWeight: FontWeight.bold),
+                            "Sign Up",
+                            style: TextStyle(
+                              fontSize: 18,
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
+                  ),
+                ),
+                const SizedBox(height: 20),
+
+                Center(
+                  child: GestureDetector(
+                    onTap: () {
+                      Navigator.pop(context);
+                    },
+                    child: RichText(
+                      text: TextSpan(
+                        text: "Already have account? ",
+                        style: const TextStyle(color: Colors.grey),
+                        children: [
+                          TextSpan(
+                            text: "Sign In",
+                            style: TextStyle(
+                              color: primaryMaroon,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
                 ),
               ],
