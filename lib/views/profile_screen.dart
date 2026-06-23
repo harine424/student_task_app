@@ -3,11 +3,12 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
+import '../models/user_model.dart';
 import '../services/api_path.dart';
 import 'support_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
-  final Map<String, dynamic> user;
+  final UserModel user;
   const ProfileScreen({super.key, required this.user});
 
   @override
@@ -21,8 +22,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
   @override
   void initState() {
     super.initState();
-    _currentName = widget.user['name'] ?? 'User';
-    _currentEmail = widget.user['email'] ?? 'No email';
+    _currentName = widget.user.name ?? 'User';
+    _currentEmail = widget.user.email ?? 'No email';
   }
 
   Future<void> _updateProfile(String name, String email) async {
@@ -31,7 +32,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         Uri.parse(ApiPath.endpoint("update_profile.php")),
         headers: {"Content-Type": "application/json"},
         body: jsonEncode({
-          "user_id": widget.user['id'],
+          "user_id": widget.user.id,
           "name": name,
           "email": email,
         }),
@@ -48,8 +49,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
             _currentEmail = email;
           });
 
-          widget.user['name'] = name;
-          widget.user['email'] = email;
+          widget.user.name;
+          widget.user.email;
 
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(

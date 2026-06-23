@@ -3,13 +3,14 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
+import '../models/user_model.dart';
 import '../services/api_path.dart';
 import 'profile_screen.dart';
 import 'rewards_screen.dart';
 import 'task_detail_screen.dart';
 
 class MainScreen extends StatefulWidget {
-  final Map<String, dynamic> user;
+  final UserModel user;
   const MainScreen({super.key, required this.user});
 
   @override
@@ -63,7 +64,7 @@ class _MainScreenState extends State<MainScreen> {
     try {
       final tasksUri = Uri.parse(
         _loadTasksApiUrl,
-      ).replace(queryParameters: {'user_id': widget.user['id'].toString()});
+      ).replace(queryParameters: {'user_id': widget.user.id.toString()});
 
       final response = await http.get(tasksUri);
 
@@ -144,7 +145,7 @@ class _MainScreenState extends State<MainScreen> {
       Uri.parse(ApiPath.endpoint("add_task.php")),
       headers: {"Content-Type": "application/json"},
       body: jsonEncode({
-        "user_id": widget.user['id'],
+        "user_id": widget.user.id,
         "title": title,
         "deadline": deadline,
         "status": "Pending",
@@ -369,7 +370,7 @@ class _MainScreenState extends State<MainScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Welcome, ${widget.user['name']}',
+            'Welcome, ${widget.user.name}',
             style: const TextStyle(
               color: Colors.white,
               fontSize: 20,
@@ -378,7 +379,7 @@ class _MainScreenState extends State<MainScreen> {
           ),
           const SizedBox(height: 6),
           Text(
-            'Student | ${widget.user['email']}',
+            'Student | ${widget.user.email}',
             style: TextStyle(color: Colors.white.withValues(alpha: 0.78)),
           ),
         ],

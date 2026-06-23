@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
+import '../models/user_model.dart';
 import '../services/api_path.dart';
 import 'main_screen.dart';
 import 'register_screen.dart';
@@ -15,7 +16,6 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  // Controllers and State from your original code
   final TextEditingController emailController = TextEditingController();
   final TextEditingController passwordController = TextEditingController();
   bool isLoading = false;
@@ -65,7 +65,8 @@ class _LoginScreenState extends State<LoginScreen> {
           Navigator.pushReplacement(
             context,
             MaterialPageRoute(
-              builder: (context) => MainScreen(user: data['user']),
+              builder: (context) =>
+                  MainScreen(user: UserModel.fromJson(data['user'])),
             ),
           );
         }
@@ -144,7 +145,6 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
               const SizedBox(height: 30),
 
-              // --- Email Field ---
               Container(
                 decoration: BoxDecoration(
                   color: fieldBackground,
@@ -163,7 +163,6 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
               const SizedBox(height: 15),
 
-              // --- Password Field ---
               Container(
                 decoration: BoxDecoration(
                   color: fieldBackground,
