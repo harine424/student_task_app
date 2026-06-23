@@ -17,23 +17,24 @@ class MainScreen extends StatefulWidget {
 }
 
 class _MainScreenState extends State<MainScreen> {
-  // --- UI Colors ---
-  final Color primaryMaroon = const Color(0xFF7B1113); // Deep, rich maroon
+  final Color primaryMaroon = const Color(0xFF7B1113);
   final Color backgroundWhite = const Color(0xFFF8F9FA);
   final Color textDark = const Color(0xFF333333);
 
-  // --- Logic State ---
   int _currentIndex = 0;
   List<dynamic> _tasks = [];
   String _currentFilter = 'All';
 
+  bool _isLoading = true;
+
+  String get _loadTasksApiUrl => ApiPath.endpoint("load_tasks.php");
+
   @override
   void initState() {
     super.initState();
-    _fetchTasks();
+    _loadDashboardData();
   }
 
-  // --- Backend Logic (Unchanged) ---
   int _calculateResponsibilityStreak() {
     return _tasks.where((t) => t['status'] == 'Completed').length;
   }
@@ -54,23 +55,47 @@ class _MainScreenState extends State<MainScreen> {
     }
   }
 
-  Future<void> _fetchTasks() async {
-    try {
-      final url = ApiPath.endpoint(
-        "load_tasks.php?user_id=${widget.user['id']}",
-      );
-      final response = await http.get(Uri.parse(url));
+  Future<void> _loadDashboardData() async {
+    setState(() {
+      _isLoading = true;
+    });
 
-      if (response.statusCode == 200) {
-        final Map<String, dynamic> data = jsonDecode(response.body);
-        if (data['status'] == 'success') {
-          setState(() {
-            _tasks = data['tasks'] ?? [];
-          });
-        }
+    try {
+      final tasksUri = Uri.parse(
+        _loadTasksApiUrl,
+      ).replace(queryParameters: {'user_id': widget.user['id'].toString()});
+
+      final response = await http.get(tasksUri);
+
+      if (response.statusCode != 200) {
+        throw Exception('Failed to load dashboard data');
       }
+
+      final data = jsonDecode(response.body);
+
+      if (data['status'] != 'success') {
+        throw Exception(data['message'] ?? 'Failed to load data');
+      }
+
+      final loadedTasks = List<dynamic>.from(data['tasks'] ?? []);
+
+      if (!mounted) return;
+      setState(() {
+        _tasks
+          ..clear()
+          ..addAll(loadedTasks);
+      });
     } catch (e) {
-      debugPrint("Error: $e");
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Dashboard load error: $e')));
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 
@@ -89,7 +114,7 @@ class _MainScreenState extends State<MainScreen> {
       headers: {"Content-Type": "application/json"},
       body: jsonEncode({"task_id": id, "status": newStatus}),
     );
-    _fetchTasks();
+    _loadDashboardData();
   }
 
   Future<void> _deleteTask(String id) async {
@@ -98,7 +123,7 @@ class _MainScreenState extends State<MainScreen> {
       headers: {"Content-Type": "application/json"},
       body: jsonEncode({"task_id": id}),
     );
-    _fetchTasks();
+    _loadDashboardData();
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -109,7 +134,11 @@ class _MainScreenState extends State<MainScreen> {
     }
   }
 
-  Future<void> _submitNewTask(String title, String deadline) async {
+  Future<void> _submitNewTask(
+    String title,
+    String deadline,
+    String soundPreference,
+  ) async {
     if (title.isEmpty) return;
     await http.post(
       Uri.parse(ApiPath.endpoint("add_task.php")),
@@ -119,31 +148,17 @@ class _MainScreenState extends State<MainScreen> {
         "title": title,
         "deadline": deadline,
         "status": "Pending",
+        "alarm_sound": soundPreference,
       }),
     );
-    _fetchTasks();
+    _loadDashboardData();
   }
 
-  // --- UI Helpers ---
-  IconData _getStatusIcon(String status) {
-    if (status == 'Completed') return Icons.check_circle;
-    if (status == 'In Progress') return Icons.run_circle;
-    return Icons.radio_button_unchecked;
-  }
-
-  Color _getStatusColor(String status) {
-    if (status == 'Completed') return Colors.green;
-    if (status == 'In Progress') return Colors.orange;
-    return Colors.grey;
-  }
-
-  // Find the closest pending deadline to highlight in the top card
   Map<String, dynamic>? _getClosestDeadline() {
     final pendingTasks = _tasks
         .where((t) => t['status'] != 'Completed')
         .toList();
     if (pendingTasks.isEmpty) return null;
-
     pendingTasks.sort((a, b) {
       try {
         return DateTime.parse(
@@ -159,84 +174,266 @@ class _MainScreenState extends State<MainScreen> {
   void _showAddTaskDialog() {
     final TextEditingController titleController = TextEditingController();
     final TextEditingController dateController = TextEditingController();
+    String selectedSound = "Standard Beep";
+
+    int completedTasks = _calculateResponsibilityStreak();
+    bool isUnlocked = completedTasks >= 5;
+
     showDialog(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Text(
-          "Add New Task",
-          style: TextStyle(color: primaryMaroon, fontWeight: FontWeight.bold),
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: titleController,
-              decoration: InputDecoration(
-                labelText: "Task Title",
-                prefixIcon: Icon(Icons.edit_note, color: primaryMaroon),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(15),
-                ),
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          return AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+            ),
+            title: Text(
+              "Add New Task",
+              style: TextStyle(
+                color: primaryMaroon,
+                fontWeight: FontWeight.bold,
               ),
             ),
-            const SizedBox(height: 15),
-            TextField(
-              controller: dateController,
-              readOnly: true,
-              decoration: InputDecoration(
-                labelText: "Deadline Date",
-                prefixIcon: Icon(Icons.calendar_month, color: primaryMaroon),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(15),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: titleController,
+                  decoration: InputDecoration(
+                    labelText: "Task Title",
+                    prefixIcon: Icon(Icons.edit_note, color: primaryMaroon),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(15),
+                    ),
+                  ),
                 ),
-              ),
-              onTap: () async {
-                DateTime? picked = await showDatePicker(
-                  context: context,
-                  initialDate: DateTime.now(),
-                  firstDate: DateTime.now(),
-                  lastDate: DateTime(2030),
-                  builder: (context, child) {
-                    return Theme(
-                      data: Theme.of(context).copyWith(
-                        colorScheme: ColorScheme.light(
-                          primary: primaryMaroon,
-                          onPrimary: Colors.white,
-                          onSurface: textDark,
-                        ),
-                      ),
-                      child: child!,
+                const SizedBox(height: 15),
+                TextField(
+                  controller: dateController,
+                  readOnly: true,
+                  decoration: InputDecoration(
+                    labelText: "Deadline Date",
+                    prefixIcon: Icon(
+                      Icons.calendar_month,
+                      color: primaryMaroon,
+                    ),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(15),
+                    ),
+                  ),
+                  onTap: () async {
+                    DateTime? picked = await showDatePicker(
+                      context: context,
+                      initialDate: DateTime.now(),
+                      firstDate: DateTime.now(),
+                      lastDate: DateTime(2030),
                     );
+                    if (picked != null) {
+                      dateController.text =
+                          "${picked.year}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}";
+                    }
                   },
-                );
-                if (picked != null) {
-                  dateController.text =
-                      "${picked.year}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}";
-                }
-              },
+                ),
+                const SizedBox(height: 15),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
+                  decoration: BoxDecoration(
+                    color: isUnlocked ? Colors.white : Colors.grey.shade100,
+                    border: Border.all(
+                      color: isUnlocked ? primaryMaroon : Colors.grey.shade300,
+                    ),
+                    borderRadius: BorderRadius.circular(15),
+                  ),
+                  child: isUnlocked
+                      ? DropdownButtonHideUnderline(
+                          child: DropdownButton<String>(
+                            isExpanded: true,
+                            value: selectedSound,
+                            icon: Icon(Icons.music_note, color: primaryMaroon),
+                            items:
+                                [
+                                  "Standard Beep",
+                                  "Marimba",
+                                  "Intense Alarm",
+                                  "Lofi Chimes",
+                                ].map((String value) {
+                                  return DropdownMenuItem<String>(
+                                    value: value,
+                                    child: Text(value),
+                                  );
+                                }).toList(),
+                            onChanged: (String? newValue) {
+                              setDialogState(() {
+                                selectedSound = newValue!;
+                              });
+                            },
+                          ),
+                        )
+                      : Row(
+                          children: [
+                            const Icon(
+                              Icons.lock,
+                              color: Colors.grey,
+                              size: 20,
+                            ),
+                            const SizedBox(width: 10),
+                            const Expanded(
+                              child: Text(
+                                "Unlock Pro Sounds",
+                                style: TextStyle(
+                                  color: Colors.grey,
+                                  fontSize: 14,
+                                ),
+                              ),
+                            ),
+                            Text(
+                              "$completedTasks/5 done",
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: Colors.grey,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
+                        ),
+                ),
+              ],
             ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text("Cancel", style: TextStyle(color: Colors.grey)),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: primaryMaroon,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext),
+                child: const Text(
+                  "Cancel",
+                  style: TextStyle(color: Colors.grey),
+                ),
               ),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: primaryMaroon,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+                onPressed: () {
+                  Navigator.pop(dialogContext);
+                  _submitNewTask(
+                    titleController.text,
+                    dateController.text,
+                    selectedSound,
+                  );
+                },
+                child: const Text(
+                  "Save Task",
+                  style: TextStyle(color: Colors.white),
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildResponsiveBody(Widget child) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final maxWidth = constraints.maxWidth >= 1500
+            ? 1280.0
+            : constraints.maxWidth >= 1100
+            ? 1120.0
+            : constraints.maxWidth;
+
+        return Align(
+          alignment: Alignment.topCenter,
+          child: SizedBox(width: maxWidth, child: child),
+        );
+      },
+    );
+  }
+
+  Widget _buildWelcomeCard() {
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(20),
+        gradient: LinearGradient(
+          colors: [primaryMaroon, const Color(0xFF5D0C0E)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Welcome, ${widget.user['name']}',
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
             ),
-            onPressed: () {
-              Navigator.pop(dialogContext);
-              _submitNewTask(titleController.text, dateController.text);
-            },
-            child: const Text(
-              "Save Task",
-              style: TextStyle(color: Colors.white),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Student | ${widget.user['email']}',
+            style: TextStyle(color: Colors.white.withValues(alpha: 0.78)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSummaryCard(
+    String title,
+    String value,
+    IconData icon,
+    Color backgroundColor,
+  ) {
+    final theme = Theme.of(context);
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.08),
+            blurRadius: 12,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          CircleAvatar(
+            backgroundColor: backgroundColor,
+            child: Icon(icon, color: primaryMaroon),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  value,
+                  style: const TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: theme.textTheme.bodySmall?.color,
+                  ),
+                ),
+              ],
             ),
           ),
         ],
@@ -244,14 +441,114 @@ class _MainScreenState extends State<MainScreen> {
     );
   }
 
-  // --- Main Dashboard UI ---
+  Widget _buildDashboardStatusChip(String status) {
+    Color backgroundColor;
+    Color foregroundColor;
+
+    switch (status) {
+      case 'Completed':
+        backgroundColor = Colors.green.shade100;
+        foregroundColor = Colors.green.shade900;
+        break;
+      case 'In Progress':
+        backgroundColor = Colors.blue.shade100;
+        foregroundColor = Colors.blue.shade900;
+        break;
+      case 'Pending':
+      default:
+        backgroundColor = Colors.orange.shade100;
+        foregroundColor = Colors.orange.shade900;
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: backgroundColor,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        status,
+        style: TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
+          color: foregroundColor,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildUrgencyBanner() {
+    Map<String, dynamic>? urgentTask = _getClosestDeadline();
+    if (urgentTask == null) return const SizedBox.shrink();
+
+    try {
+      DateTime deadline = DateTime.parse(urgentTask['deadline']);
+      DateTime now = DateTime.now();
+      Duration diff = deadline.difference(now);
+
+      if (diff.isNegative) {
+        return Card(
+          color: Colors.red.shade50,
+          margin: const EdgeInsets.only(bottom: 16),
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Row(
+              children: [
+                const Icon(Icons.warning_amber_rounded, color: Colors.red),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    "⚠️ Reminder: '${urgentTask['title']}' is OVERDUE!",
+                    style: const TextStyle(
+                      color: Colors.red,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      } else if (diff.inHours <= 24) {
+        return Card(
+          color: Colors.orange.shade50,
+          margin: const EdgeInsets.only(bottom: 16),
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Row(
+              children: [
+                Icon(Icons.timer, color: Colors.orange.shade700),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    "⏳ Reminder: '${urgentTask['title']}' is due in ${diff.inHours} hours!",
+                    style: TextStyle(
+                      color: Colors.orange.shade900,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      return const SizedBox.shrink();
+    }
+    return const SizedBox.shrink();
+  }
+
   Widget _buildDashboard() {
+    final pendingTasks = _tasks.where((t) => t['status'] == 'Pending').length;
+    final totalTasks = _tasks.length;
+    final streak = _calculateResponsibilityStreak();
+
     final filteredTasks = _tasks.where((task) {
       if (_currentFilter == 'All') return true;
       if (_currentFilter == 'Overdue') {
         try {
-          DateTime deadline = DateTime.parse(task['deadline']);
-          return deadline.isBefore(DateTime.now()) &&
+          return DateTime.parse(task['deadline']).isBefore(DateTime.now()) &&
               task['status'] != 'Completed';
         } catch (e) {
           return false;
@@ -260,193 +557,200 @@ class _MainScreenState extends State<MainScreen> {
       return task['status'] == _currentFilter;
     }).toList();
 
-    Map<String, dynamic>? upcomingTask = _getClosestDeadline();
+    return _buildResponsiveBody(
+      _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : RefreshIndicator(
+              onRefresh: _loadDashboardData,
+              child: ListView(
+                padding: const EdgeInsets.all(16),
+                children: [
+                  _buildWelcomeCard(),
+                  const SizedBox(height: 16),
 
-    return Column(
-      children: [
-        // 1. Curved Maroon Header
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.only(bottom: 30, left: 20, right: 20),
-          decoration: BoxDecoration(
-            color: primaryMaroon,
-            borderRadius: const BorderRadius.vertical(
-              bottom: Radius.circular(40),
-            ),
-          ),
-          child: Column(
-            children: [
-              const SizedBox(height: 10),
-              // Highlight Card (Shows closest upcoming deadline dynamically!)
-              Container(
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(20),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.2),
-                      blurRadius: 10,
-                      offset: const Offset(0, 5),
+                  _buildUrgencyBanner(),
+
+                  Text(
+                    'App Summary',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
                     ),
-                  ],
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                  ),
+                  const SizedBox(height: 10),
+
+                  LayoutBuilder(
+                    builder: (context, constraints) {
+                      final cards = [
+                        _buildSummaryCard(
+                          'Total Tasks',
+                          totalTasks.toString(),
+                          Icons.assignment_outlined,
+                          const Color(0xFFDBEAFE),
+                        ),
+                        _buildSummaryCard(
+                          'Pending',
+                          pendingTasks.toString(),
+                          Icons.hourglass_top_outlined,
+                          const Color(0xFFFEF3C7),
+                        ),
+                        _buildSummaryCard(
+                          'Completed Streak',
+                          streak.toString(),
+                          Icons.local_fire_department,
+                          const Color(0xFFDCFCE7),
+                        ),
+                      ];
+
+                      if (constraints.maxWidth >= 900) {
+                        return GridView.builder(
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
+                          itemCount: cards.length,
+                          gridDelegate:
+                              const SliverGridDelegateWithFixedCrossAxisCount(
+                                crossAxisCount: 3,
+                                crossAxisSpacing: 12,
+                                mainAxisSpacing: 12,
+                                childAspectRatio: 2.8,
+                              ),
+                          itemBuilder: (context, index) => cards[index],
+                        );
+                      }
+                      return Column(
                         children: [
-                          Text(
-                            upcomingTask != null
-                                ? "Next Deadline"
-                                : "All Caught Up!",
-                            style: TextStyle(
-                              color: primaryMaroon,
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
+                          for (int i = 0; i < cards.length; i++) ...[
+                            cards[i],
+                            if (i != cards.length - 1)
+                              const SizedBox(height: 12),
+                          ],
+                        ],
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 16),
+
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'My Tasks',
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(fontWeight: FontWeight.bold),
+                      ),
+                      PopupMenuButton<String>(
+                        icon: const Icon(Icons.filter_list),
+                        onSelected: (String newValue) =>
+                            setState(() => _currentFilter = newValue),
+                        itemBuilder: (BuildContext context) =>
+                            <PopupMenuEntry<String>>[
+                              const PopupMenuItem<String>(
+                                value: 'All',
+                                child: Text('All Tasks'),
+                              ),
+                              const PopupMenuItem<String>(
+                                value: 'Pending',
+                                child: Text('Pending'),
+                              ),
+                              const PopupMenuItem<String>(
+                                value: 'In Progress',
+                                child: Text('In Progress'),
+                              ),
+                              const PopupMenuItem<String>(
+                                value: 'Completed',
+                                child: Text('Completed'),
+                              ),
+                              const PopupMenuItem<String>(
+                                value: 'Overdue',
+                                child: Text(
+                                  'Overdue Deadlines',
+                                  style: TextStyle(color: Colors.red),
+                                ),
+                              ),
+                            ],
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+
+                  if (filteredTasks.isEmpty)
+                    Card(
+                      color: Theme.of(context).colorScheme.surface,
+                      child: const Padding(
+                        padding: EdgeInsets.all(16),
+                        child: Text('No tasks available'),
+                      ),
+                    )
+                  else
+                    ...filteredTasks.map(
+                      (task) => Card(
+                        color: Theme.of(context).colorScheme.surface,
+                        margin: const EdgeInsets.only(bottom: 10),
+                        child: ListTile(
+                          onTap: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => TaskDetailScreen(
+                                task: task,
+                                onUpdate: () => _loadDashboardData(),
+                              ),
                             ),
                           ),
-                          const SizedBox(height: 5),
-                          Text(
-                            upcomingTask != null
-                                ? upcomingTask['title']
-                                : "Take a break, you've earned it.",
-                            style: const TextStyle(
-                              color: Colors.grey,
-                              fontSize: 14,
+                          leading: IconButton(
+                            icon: Icon(
+                              task['status'] == 'Completed'
+                                  ? Icons.check_circle
+                                  : Icons.radio_button_unchecked,
+                              color: task['status'] == 'Completed'
+                                  ? Colors.green
+                                  : Colors.grey,
+                            ),
+                            onPressed: () => _cycleTaskStatus(
+                              task['id'].toString(),
+                              task['status'],
+                            ),
+                          ),
+                          title: Text(
+                            task['title'],
+                            style: TextStyle(
+                              decoration: task['status'] == 'Completed'
+                                  ? TextDecoration.lineThrough
+                                  : null,
+                              color: task['status'] == 'Completed'
+                                  ? Colors.grey
+                                  : textDark,
+                              fontWeight: FontWeight.bold,
                             ),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
-                        ],
-                      ),
-                    ),
-                    if (upcomingTask != null)
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 8,
-                        ),
-                        decoration: BoxDecoration(
-                          color: primaryMaroon.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: Text(
-                          _calculateTimeRemaining(
-                            upcomingTask['deadline'],
-                          ).split(":")[0], // Just shows "Time left"
-                          style: TextStyle(
-                            color: primaryMaroon,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 12,
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-
-        const SizedBox(height: 10),
-
-        // 2. Task List
-        Expanded(
-          child: filteredTasks.isEmpty
-              ? Center(
-                  child: Text(
-                    "No tasks in '$_currentFilter'",
-                    style: const TextStyle(color: Colors.grey, fontSize: 16),
-                  ),
-                )
-              : ListView.builder(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 20,
-                    vertical: 10,
-                  ),
-                  itemCount: filteredTasks.length,
-                  itemBuilder: (context, index) {
-                    final task = filteredTasks[index];
-                    bool isCompleted = task['status'] == 'Completed';
-
-                    return Card(
-                      elevation: 2,
-                      margin: const EdgeInsets.only(bottom: 15),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(15),
-                        side: BorderSide(color: Colors.grey.shade200, width: 1),
-                      ),
-                      color: Colors.white,
-                      child: ListTile(
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 15,
-                          vertical: 8,
-                        ),
-                        onTap: () => Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => TaskDetailScreen(
-                              task: task,
-                              onUpdate: () => _fetchTasks(),
-                            ),
-                          ),
-                        ),
-                        // Status Circle Button
-                        leading: IconButton(
-                          icon: Icon(
-                            _getStatusIcon(task['status']),
-                            color: _getStatusColor(task['status']),
-                            size: 30,
-                          ),
-                          onPressed: () => _cycleTaskStatus(
-                            task['id'].toString(),
-                            task['status'],
-                          ),
-                        ),
-                        // Title
-                        title: Text(
-                          task['title'],
-                          style: TextStyle(
-                            color: isCompleted ? Colors.grey : textDark,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16,
-                            decoration: isCompleted
-                                ? TextDecoration.lineThrough
-                                : null,
-                          ),
-                        ),
-                        // Subtitle
-                        subtitle: Padding(
-                          padding: const EdgeInsets.only(top: 5.0),
-                          child: Text(
-                            isCompleted
+                          subtitle: Text(
+                            task['status'] == 'Completed'
                                 ? "Due: ${task['deadline']} • Done! 🎉"
                                 : "Due: ${task['deadline']}\n${_calculateTimeRemaining(task['deadline'])}",
-                            style: TextStyle(
-                              color: isCompleted
-                                  ? Colors.grey
-                                  : Colors.blueGrey,
-                              fontSize: 12,
-                            ),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
                           ),
-                        ),
-                        // Delete Button
-                        trailing: IconButton(
-                          icon: const Icon(
-                            Icons.delete_outline,
-                            color: Colors.redAccent,
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              _buildDashboardStatusChip(task['status']),
+                              IconButton(
+                                icon: const Icon(
+                                  Icons.delete_outline,
+                                  color: Colors.redAccent,
+                                  size: 20,
+                                ),
+                                onPressed: () =>
+                                    _deleteTask(task['id'].toString()),
+                              ),
+                            ],
                           ),
-                          onPressed: () => _deleteTask(task['id'].toString()),
                         ),
                       ),
-                    );
-                  },
-                ),
-        ),
-      ],
+                    ),
+                ],
+              ),
+            ),
     );
   }
 
@@ -464,59 +768,14 @@ class _MainScreenState extends State<MainScreen> {
             color: Colors.white,
           ),
         ),
-        backgroundColor:
-            primaryMaroon, // App bar perfectly blends into the header
+        backgroundColor: primaryMaroon,
         elevation: 0,
-        centerTitle: false,
         actions: [
-          // The Streak Counter!
-          if (_calculateResponsibilityStreak() > 0) ...[
-            const Icon(Icons.local_fire_department, color: Colors.orangeAccent),
-            const SizedBox(width: 4),
-            Text(
-              "${_calculateResponsibilityStreak()}",
-              style: const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
-              ),
-            ),
-            const SizedBox(width: 15),
-          ],
-          // Filter Menu
           if (_currentIndex == 0)
-            PopupMenuButton<String>(
-              icon: const Icon(Icons.filter_list, color: Colors.white),
-              onSelected: (String newValue) {
-                setState(() {
-                  _currentFilter = newValue;
-                });
-              },
-              itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
-                const PopupMenuItem<String>(
-                  value: 'All',
-                  child: Text('All Tasks'),
-                ),
-                const PopupMenuItem<String>(
-                  value: 'Pending',
-                  child: Text('Pending'),
-                ),
-                const PopupMenuItem<String>(
-                  value: 'In Progress',
-                  child: Text('In Progress'),
-                ),
-                const PopupMenuItem<String>(
-                  value: 'Completed',
-                  child: Text('Completed'),
-                ),
-                const PopupMenuItem<String>(
-                  value: 'Overdue',
-                  child: Text(
-                    'Overdue Deadlines',
-                    style: TextStyle(color: Colors.red),
-                  ),
-                ),
-              ],
+            IconButton(
+              onPressed: _loadDashboardData,
+              tooltip: 'Refresh',
+              icon: const Icon(Icons.refresh, color: Colors.white),
             ),
         ],
       ),
