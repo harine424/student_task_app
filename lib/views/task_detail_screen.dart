@@ -30,7 +30,6 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
   }
 
   Future<void> _updateTask() async {
-    // Use the 10.0.2.2 IP for Android Emulator
     final url = ApiPath.endpoint("edit_task.php");
 
     debugPrint("Calling: $url");

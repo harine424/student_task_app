@@ -1,13 +1,13 @@
 class UserModel {
   final int id;
-  final String name;
-  final String email;
+ String name;
+ String email;
   final String phone;
   final String role;
   final String profileImage;
   final String createdAt;
 
-  const UserModel({
+   UserModel({
     required this.id,
     required this.name,
     required this.email,

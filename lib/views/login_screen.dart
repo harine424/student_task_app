@@ -21,7 +21,6 @@ class _LoginScreenState extends State<LoginScreen> {
   bool isLoading = false;
 
   bool _obscurePassword = true;
-  bool _rememberMe = false;
 
   final Color primaryMaroon = const Color(0xFF7B1113);
   final Color fieldBackground = const Color(0xFFF5F6FA);
@@ -197,22 +196,6 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
               ),
               const SizedBox(height: 15),
-
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text(
-                    "Remember me next time",
-                    style: TextStyle(fontSize: 12, color: Colors.grey),
-                  ),
-                  Switch(
-                    value: _rememberMe,
-                    onChanged: (value) => setState(() => _rememberMe = value),
-                    activeColor: primaryMaroon,
-                  ),
-                ],
-              ),
-              const SizedBox(height: 20),
 
               SizedBox(
                 width: double.infinity,

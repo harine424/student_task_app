@@ -135,11 +135,7 @@ class _MainScreenState extends State<MainScreen> {
     }
   }
 
-  Future<void> _submitNewTask(
-    String title,
-    String deadline,
-    String soundPreference,
-  ) async {
+  Future<void> _submitNewTask(String title, String deadline) async {
     if (title.isEmpty) return;
     await http.post(
       Uri.parse(ApiPath.endpoint("add_task.php")),
@@ -149,7 +145,6 @@ class _MainScreenState extends State<MainScreen> {
         "title": title,
         "deadline": deadline,
         "status": "Pending",
-        "alarm_sound": soundPreference,
       }),
     );
     _loadDashboardData();
@@ -175,10 +170,6 @@ class _MainScreenState extends State<MainScreen> {
   void _showAddTaskDialog() {
     final TextEditingController titleController = TextEditingController();
     final TextEditingController dateController = TextEditingController();
-    String selectedSound = "Standard Beep";
-
-    int completedTasks = _calculateResponsibilityStreak();
-    bool isUnlocked = completedTasks >= 5;
 
     showDialog(
       context: context,
@@ -235,72 +226,6 @@ class _MainScreenState extends State<MainScreen> {
                     }
                   },
                 ),
-                const SizedBox(height: 15),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 8,
-                  ),
-                  decoration: BoxDecoration(
-                    color: isUnlocked ? Colors.white : Colors.grey.shade100,
-                    border: Border.all(
-                      color: isUnlocked ? primaryMaroon : Colors.grey.shade300,
-                    ),
-                    borderRadius: BorderRadius.circular(15),
-                  ),
-                  child: isUnlocked
-                      ? DropdownButtonHideUnderline(
-                          child: DropdownButton<String>(
-                            isExpanded: true,
-                            value: selectedSound,
-                            icon: Icon(Icons.music_note, color: primaryMaroon),
-                            items:
-                                [
-                                  "Standard Beep",
-                                  "Marimba",
-                                  "Intense Alarm",
-                                  "Lofi Chimes",
-                                ].map((String value) {
-                                  return DropdownMenuItem<String>(
-                                    value: value,
-                                    child: Text(value),
-                                  );
-                                }).toList(),
-                            onChanged: (String? newValue) {
-                              setDialogState(() {
-                                selectedSound = newValue!;
-                              });
-                            },
-                          ),
-                        )
-                      : Row(
-                          children: [
-                            const Icon(
-                              Icons.lock,
-                              color: Colors.grey,
-                              size: 20,
-                            ),
-                            const SizedBox(width: 10),
-                            const Expanded(
-                              child: Text(
-                                "Unlock Pro Sounds",
-                                style: TextStyle(
-                                  color: Colors.grey,
-                                  fontSize: 14,
-                                ),
-                              ),
-                            ),
-                            Text(
-                              "$completedTasks/5 done",
-                              style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                                color: Colors.grey,
-                                fontSize: 12,
-                              ),
-                            ),
-                          ],
-                        ),
-                ),
               ],
             ),
             actions: [
@@ -320,11 +245,7 @@ class _MainScreenState extends State<MainScreen> {
                 ),
                 onPressed: () {
                   Navigator.pop(dialogContext);
-                  _submitNewTask(
-                    titleController.text,
-                    dateController.text,
-                    selectedSound,
-                  );
+                  _submitNewTask(titleController.text, dateController.text);
                 },
                 child: const Text(
                   "Save Task",

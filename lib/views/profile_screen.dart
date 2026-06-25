@@ -1,7 +1,10 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:image_cropper/image_cropper.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../models/user_model.dart';
 import '../services/api_path.dart';
@@ -16,105 +19,252 @@ class ProfileScreen extends StatefulWidget {
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
-  late String _currentName;
-  late String _currentEmail;
+  File? _profileImage;
+  bool _isLoadingAvatar = false;
 
-  @override
-  void initState() {
-    super.initState();
-    _currentName = widget.user.name ?? 'User';
-    _currentEmail = widget.user.email ?? 'No email';
-  }
+  final Color primaryMaroon = const Color(0xFF7B1113);
 
-  Future<void> _updateProfile(String name, String email) async {
-    try {
-      final response = await http.post(
-        Uri.parse(ApiPath.endpoint("update_profile.php")),
-        headers: {"Content-Type": "application/json"},
-        body: jsonEncode({
-          "user_id": widget.user.id,
-          "name": name,
-          "email": email,
-        }),
+  // --- Image Picker & Cropper ---
+  Future<void> _pickAndCropImage() async {
+    final picker = ImagePicker();
+    final pickedFile = await picker.pickImage(source: ImageSource.gallery);
+
+    if (pickedFile != null) {
+      CroppedFile? croppedFile = await ImageCropper().cropImage(
+        sourcePath: pickedFile.path,
+        aspectRatio: const CropAspectRatio(ratioX: 1, ratioY: 1),
+        uiSettings: [
+          AndroidUiSettings(
+            toolbarTitle: 'Crop Profile Picture',
+            toolbarColor: primaryMaroon,
+            toolbarWidgetColor: Colors.white,
+            initAspectRatio: CropAspectRatioPreset.square,
+            lockAspectRatio: true,
+          ),
+          IOSUiSettings(
+            title: 'Crop Profile Picture',
+            aspectRatioLockEnabled: true,
+          ),
+        ],
       );
 
-      debugPrint("SERVER RESPONSE: ${response.body}");
-
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        if (data['status'] == 'success') {
-          // Update the screen instantly
-          setState(() {
-            _currentName = name;
-            _currentEmail = email;
-          });
-
-          widget.user.name;
-          widget.user.email;
-
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text("Profile updated successfully!"),
-                backgroundColor: Colors.green,
-              ),
-            );
-          }
-        } else {
-          debugPrint("Server Error: ${data['message']}");
-        }
+      if (croppedFile != null) {
+        setState(() {
+          _profileImage = File(croppedFile.path);
+        });
+        _uploadProfilePicture(File(croppedFile.path));
       }
-    } catch (e) {
-      debugPrint("HTTP Error updating profile: $e");
     }
   }
 
-  void _showEditProfileDialog() {
-    final nameController = TextEditingController(text: _currentName);
-    final emailController = TextEditingController(text: _currentEmail);
-
-    showDialog(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text("Edit Profile"),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: nameController,
-              decoration: const InputDecoration(
-                labelText: "Full Name",
-                prefixIcon: Icon(Icons.person),
-              ),
-            ),
-            const SizedBox(height: 10),
-            TextField(
-              controller: emailController,
-              decoration: const InputDecoration(
-                labelText: "Email Address",
-                prefixIcon: Icon(Icons.email),
-              ),
-              keyboardType: TextInputType.emailAddress,
-            ),
-          ],
+  Future<void> _uploadProfilePicture(File image) async {
+    setState(() => _isLoadingAvatar = true);
+    await Future.delayed(
+      const Duration(seconds: 1),
+    ); // Placeholder for future avatar upload PHP
+    setState(() => _isLoadingAvatar = false);
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Profile picture updated!"),
+          backgroundColor: Colors.green,
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text("Cancel"),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(dialogContext);
-              _updateProfile(nameController.text, emailController.text);
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.blueAccent,
-              foregroundColor: Colors.white,
+      );
+    }
+  }
+
+  // --- Secure Password Change ---
+  Future<void> _showChangePasswordDialog() async {
+    final oldPasswordController = TextEditingController();
+    final newPasswordController = TextEditingController();
+    final confirmPasswordController = TextEditingController();
+    bool isDialogLoading = false;
+    bool obscureOld = true;
+    bool obscureNew = true;
+
+    await showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          return AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
             ),
-            child: const Text("Save Changes"),
-          ),
-        ],
+            title: const Text(
+              "Change Password",
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: oldPasswordController,
+                  obscureText: obscureOld,
+                  decoration: InputDecoration(
+                    labelText: "Old Password",
+                    prefixIcon: const Icon(
+                      Icons.lock_outline,
+                      color: Colors.grey,
+                    ),
+                    suffixIcon: IconButton(
+                      icon: Icon(
+                        obscureOld ? Icons.visibility_off : Icons.visibility,
+                        color: Colors.grey,
+                      ),
+                      onPressed: () =>
+                          setDialogState(() => obscureOld = !obscureOld),
+                    ),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 15),
+                TextField(
+                  controller: newPasswordController,
+                  obscureText: obscureNew,
+                  decoration: InputDecoration(
+                    labelText: "New Password",
+                    prefixIcon: const Icon(Icons.lock, color: Colors.grey),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 15),
+                TextField(
+                  controller: confirmPasswordController,
+                  obscureText: obscureNew,
+                  decoration: InputDecoration(
+                    labelText: "Confirm New Password",
+                    prefixIcon: const Icon(Icons.lock, color: Colors.grey),
+                    suffixIcon: IconButton(
+                      icon: Icon(
+                        obscureNew ? Icons.visibility_off : Icons.visibility,
+                        color: Colors.grey,
+                      ),
+                      onPressed: () =>
+                          setDialogState(() => obscureNew = !obscureNew),
+                    ),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: isDialogLoading
+                    ? null
+                    : () => Navigator.pop(dialogContext),
+                child: const Text(
+                  "Cancel",
+                  style: TextStyle(color: Colors.grey),
+                ),
+              ),
+              ElevatedButton(
+                onPressed: isDialogLoading
+                    ? null
+                    : () async {
+                        if (newPasswordController.text !=
+                            confirmPasswordController.text) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text("New passwords do not match!"),
+                              backgroundColor: Colors.red,
+                            ),
+                          );
+                          return;
+                        }
+                        if (newPasswordController.text.length < 6) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text(
+                                "Password must be at least 6 characters",
+                              ),
+                              backgroundColor: Colors.red,
+                            ),
+                          );
+                          return;
+                        }
+
+                        setDialogState(() => isDialogLoading = true);
+
+                        try {
+                          // Real API call to database
+                          final response = await http.post(
+                            Uri.parse(ApiPath.endpoint("change_password.php")),
+                            headers: {"Content-Type": "application/json"},
+                            body: jsonEncode({
+                              "user_id": widget.user.id,
+                              "old_password": oldPasswordController.text,
+                              "new_password": newPasswordController.text,
+                            }),
+                          );
+
+                          final data = jsonDecode(response.body);
+
+                          if (data['status'] == 'success') {
+                            if (mounted) {
+                              Navigator.pop(dialogContext);
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text(
+                                    "Password updated successfully!",
+                                  ),
+                                  backgroundColor: Colors.green,
+                                ),
+                              );
+                            }
+                          } else {
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(data['message']),
+                                  backgroundColor: Colors.red,
+                                ),
+                              );
+                            }
+                          }
+                        } catch (e) {
+                          debugPrint("Error: $e");
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text("Failed to connect to server"),
+                                backgroundColor: Colors.red,
+                              ),
+                            );
+                          }
+                        } finally {
+                          setDialogState(() => isDialogLoading = false);
+                        }
+                      },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: primaryMaroon,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+                child: isDialogLoading
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          color: Colors.white,
+                          strokeWidth: 2,
+                        ),
+                      )
+                    : const Text(
+                        "Update",
+                        style: TextStyle(color: Colors.white),
+                      ),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
@@ -122,42 +272,77 @@ class _ProfileScreenState extends State<ProfileScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.white,
+      appBar: AppBar(
+        title: const Text(
+          "Profile",
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+        ),
+        backgroundColor: primaryMaroon,
+        elevation: 0,
+        automaticallyImplyLeading: false,
+      ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20.0),
         child: Column(
           children: [
-            const SizedBox(height: 30),
+            const SizedBox(height: 20),
 
-            // Profile Header
-            CircleAvatar(
-              radius: 60,
-              backgroundColor: Colors.blueAccent.withOpacity(0.1),
-              child: const Icon(
-                Icons.person,
-                size: 70,
-                color: Colors.blueAccent,
+            // --- Interactive Avatar with Camera Badge ---
+            GestureDetector(
+              onTap: _pickAndCropImage,
+              child: Stack(
+                alignment: Alignment.bottomRight,
+                children: [
+                  CircleAvatar(
+                    radius: 60,
+                    backgroundColor: primaryMaroon.withOpacity(0.1),
+                    backgroundImage: _profileImage != null
+                        ? FileImage(_profileImage!)
+                        : null,
+                    child: _profileImage == null
+                        ? Icon(Icons.person, size: 70, color: primaryMaroon)
+                        : null,
+                  ),
+                  if (_isLoadingAvatar)
+                    const Positioned.fill(
+                      child: CircularProgressIndicator(color: Colors.white),
+                    ),
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: const BoxDecoration(
+                      color: Color(0xFF7B1113),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.camera_alt,
+                      color: Colors.white,
+                      size: 20,
+                    ),
+                  ),
+                ],
               ),
             ),
+
             const SizedBox(height: 20),
             Text(
-              _currentName,
+              widget.user.name,
               style: const TextStyle(fontSize: 26, fontWeight: FontWeight.bold),
             ),
+            const SizedBox(height: 5),
             Text(
-              _currentEmail,
+              widget.user.email,
               style: const TextStyle(fontSize: 16, color: Colors.grey),
             ),
-
             const SizedBox(height: 40),
 
-            // Menu Items
+            // --- Menu Items ---
             _buildMenuItem(
               context,
-              Icons.edit,
-              "Edit Profile",
-              _showEditProfileDialog,
+              Icons.security,
+              "Change Password",
+              _showChangePasswordDialog,
             ),
-
             _buildMenuItem(context, Icons.help_outline, "Help & Support", () {
               Navigator.push(
                 context,
@@ -165,7 +350,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
               );
             }),
 
-            const Divider(height: 40),
+            const SizedBox(height: 30),
+            const Divider(height: 1, color: Colors.grey),
+            const SizedBox(height: 30),
 
             // Logout Button
             SizedBox(
@@ -175,18 +362,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   context,
                 ).pushNamedAndRemoveUntil('/', (route) => false),
                 icon: const Icon(Icons.logout),
-                label: const Text("Logout"),
+                label: const Text(
+                  "Logout",
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                ),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.redAccent,
+                  backgroundColor: const Color(0xFFFF4D4F),
                   foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 15),
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(25),
+                  ),
                 ),
               ),
-            ),
-            const SizedBox(height: 20),
-            const Text(
-              "Student Task App v1.0",
-              style: TextStyle(color: Colors.grey, fontSize: 12),
             ),
           ],
         ),
@@ -200,12 +388,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
     String title,
     VoidCallback onTap,
   ) {
-    return Card(
-      elevation: 1,
+    return Container(
       margin: const EdgeInsets.only(bottom: 12),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8F9FA),
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
       child: ListTile(
-        leading: Icon(icon, color: Colors.blueAccent),
+        leading: Icon(icon, color: primaryMaroon),
         title: Text(title, style: const TextStyle(fontWeight: FontWeight.w600)),
         trailing: const Icon(Icons.chevron_right, color: Colors.grey),
         onTap: onTap,

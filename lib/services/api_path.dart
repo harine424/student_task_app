@@ -8,7 +8,7 @@ class ApiPath {
 
     switch (defaultTargetPlatform) {
       case TargetPlatform.android:
-        return "http://10.19.14.156/taskapp_server/api";
+        return "http://192.168.0.127/taskapp_server/api";
 
       default:
         return "http://localhost/taskapp_server/api";
