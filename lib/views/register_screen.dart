@@ -174,7 +174,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         ]
                       : [],
                 ),
-                // Wrapped the Column in a Form widget
                 child: Form(
                   key: _formKey,
                   child: Column(
@@ -279,7 +278,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       ),
                       const SizedBox(height: 12),
 
-                      // Changed to TextFormField for Validation
                       TextFormField(
                         controller: passwordController,
                         obscureText: obscurePassword,

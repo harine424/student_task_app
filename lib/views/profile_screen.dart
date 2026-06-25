@@ -24,7 +24,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   final Color primaryMaroon = const Color(0xFF7B1113);
 
-  // --- Image Picker & Cropper ---
   Future<void> _pickAndCropImage() async {
     final picker = ImagePicker();
     final pickedFile = await picker.pickImage(source: ImageSource.gallery);
@@ -73,7 +72,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
-  // --- Secure Password Change ---
   Future<void> _showChangePasswordDialog() async {
     final oldPasswordController = TextEditingController();
     final newPasswordController = TextEditingController();
@@ -193,7 +191,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         setDialogState(() => isDialogLoading = true);
 
                         try {
-                          // Real API call to database
                           final response = await http.post(
                             Uri.parse(ApiPath.endpoint("change_password.php")),
                             headers: {"Content-Type": "application/json"},
@@ -280,7 +277,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
           children: [
             const SizedBox(height: 20),
 
-            // --- Interactive Avatar with Camera Badge ---
             GestureDetector(
               onTap: _pickAndCropImage,
               child: Stack(
@@ -328,7 +324,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
             const SizedBox(height: 40),
 
-            // --- Menu Items ---
             _buildMenuItem(
               context,
               Icons.security,
@@ -346,7 +341,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
             const Divider(height: 1, color: Colors.grey),
             const SizedBox(height: 30),
 
-            // Logout Button
             SizedBox(
               width: double.infinity,
               child: ElevatedButton.icon(
