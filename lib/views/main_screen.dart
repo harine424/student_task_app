@@ -138,7 +138,7 @@ class _MainScreenState extends State<MainScreen> {
   Future<void> _submitNewTask(String title, String deadline) async {
     if (title.isEmpty) return;
     await http.post(
-      Uri.parse(ApiPath.endpoint("add_task.php")),
+      Uri.parse(ApiPath.endpoint("insert_task.php")),
       headers: {"Content-Type": "application/json"},
       body: jsonEncode({
         "user_id": widget.user.id,

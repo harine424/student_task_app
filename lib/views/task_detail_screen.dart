@@ -30,7 +30,7 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
   }
 
   Future<void> _updateTask() async {
-    final url = ApiPath.endpoint("edit_task.php");
+    final url = ApiPath.endpoint("update_task.php");
 
     debugPrint("Calling: $url");
     debugPrint("Data: ID=${widget.task['id']}, Title=${_titleController.text}");
